@@ -21,11 +21,9 @@ namespace CheapAwesome.Core.Services
         private readonly int TimeoutDurationInMilliseconds;
         private readonly int CacheTimeoutDurationInSeconds;
 
-        public HotelAvailabilityService(IServiceProvider serviceProvider, ILogger<HotelAvailabilityService> logger, ICacheService cacheService)
+        public HotelAvailabilityService(IEnumerable<IHotelAvailabilitySupplier> suppliers, ILogger<HotelAvailabilityService> logger, ICacheService cacheService)
         {
-            ServiceProvider = serviceProvider;
-
-            Suppliers = ServiceProvider.GetServices<IHotelAvailabilitySupplier>();
+            Suppliers = suppliers;
 
             Logger = logger ?? NullLogger<HotelAvailabilityService>.Instance;
 
@@ -72,7 +70,8 @@ namespace CheapAwesome.Core.Services
             var completedTasks = tasks.Where(t => t.IsCompletedSuccessfully);
             foreach (var task in completedTasks)
             {
-                result.AddRange(task.Result);
+                if (task.Result != null)
+                    result.AddRange(task.Result);
             }
 
             result = ValidateResults(result);
