@@ -1,6 +1,8 @@
 ﻿using CheapAwesome.Core.Common.Interface;
 using CheapAwesome.Core.Common.Model;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,22 +14,43 @@ namespace CheapAwesome.Core.Services
 {
     public class HotelAvailabilityService : IHotelAvailabilityService
     {
+        private readonly ILogger<HotelAvailabilityService> Logger;
         private readonly IServiceProvider ServiceProvider;
         private readonly IEnumerable<IHotelAvailabilitySupplier> Suppliers;
+        private readonly ICacheService CacheService;
+        private readonly int TimeoutDurationInMilliseconds;
+        private readonly int CacheTimeoutDurationInSeconds;
 
-        public HotelAvailabilityService(IServiceProvider serviceProvider)
+        public HotelAvailabilityService(IServiceProvider serviceProvider, ILogger<HotelAvailabilityService> logger, ICacheService cacheService)
         {
             ServiceProvider = serviceProvider;
 
             Suppliers = ServiceProvider.GetServices<IHotelAvailabilitySupplier>();
+
+            Logger = logger ?? NullLogger<HotelAvailabilityService>.Instance;
+
+            CacheService = cacheService;
+
+            // TODO : read from config
+            TimeoutDurationInMilliseconds = 1000;
+            CacheTimeoutDurationInSeconds = 10;
         }
 
         public IList<HotelAvailability> GetAvailabilities(int destinationId, int nights)
         {
-            //TODO : get timeout duration as parameter
-            int timeout = 1000;
-            var cancellationTokenSource = new CancellationTokenSource(timeout);
+            var cacheKey = $"{destinationId}|{nights}";
+            return CacheService.GetOrAdd(cacheKey, 
+                () => GetAvailabilitiesImpl(destinationId, nights), 
+                (result) => result != null && result.Count > 0, 
+                TimeSpan.FromSeconds(CacheTimeoutDurationInSeconds));
+        }
+
+        private IList<HotelAvailability> GetAvailabilitiesImpl(int destinationId, int nights)
+        {
+            var cancellationTokenSource = new CancellationTokenSource(TimeoutDurationInMilliseconds);
             var cancellationToken = cancellationTokenSource.Token;
+
+            var result = new List<HotelAvailability>();
 
             var tasks = new List<Task<IList<HotelAvailability>>>();
 
@@ -39,14 +62,12 @@ namespace CheapAwesome.Core.Services
 
             try
             {
-                Task.WaitAll(tasks.ToArray(), timeout, cancellationToken);
+                Task.WaitAll(tasks.ToArray(), TimeoutDurationInMilliseconds, cancellationToken);
             }
             catch (Exception ex)
             {
-                // TODO : Log
+                Logger.LogError(ex, "Data cannot be gathered from one or more suppliers.");
             }
-
-            var result = new List<HotelAvailability>();
 
             var completedTasks = tasks.Where(t => t.IsCompletedSuccessfully);
             foreach (var task in completedTasks)
@@ -54,10 +75,17 @@ namespace CheapAwesome.Core.Services
                 result.AddRange(task.Result);
             }
 
-            // TODO : validate 
-            // TODO : combine and sort
+            result = ValidateResults(result);
 
             return result;
+        }
+
+        private List<HotelAvailability> ValidateResults(List<HotelAvailability> hotelAvailabilities)
+        {
+            return hotelAvailabilities
+                    .Select(availability => new HotelAvailability { Hotel = availability.Hotel, Rates = availability.Rates?.Where(rate => rate.FinalPrice > 0).ToList() })
+                    .Where(availability => !string.IsNullOrEmpty(availability.Hotel?.Name) && availability.Rates?.Count > 0)
+                    .ToList();
         }
 
         private async Task<IList<HotelAvailability>> GetAvailabilitiesFromSupplier(IHotelAvailabilitySupplier supplier, int destinationId, int nights, CancellationToken cancellationToken)

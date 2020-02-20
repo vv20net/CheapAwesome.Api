@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CheapAwesome.Core.Common.Interface;
 using CheapAwesome.Core.Services;
+using CheapAwesome.Core.Services.Caching;
 using CheapAwesome.Supplier.BargainsForCouples;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -54,6 +55,8 @@ namespace CheapAwesome.Api
             // Dependency Injection
             services.AddTransient<IHotelAvailabilityService, HotelAvailabilityService>();
 
+            services.AddSingleton<ICacheService, MemoryCacheService>();
+
             Random jitterer = new Random();
             var retryPolicy = HttpPolicyExtensions
                   .HandleTransientHttpError()
@@ -78,6 +81,10 @@ namespace CheapAwesome.Api
             var bargainsForCouplesSetting = new BargainsForCouplesSettings();
             Configuration.GetSection(nameof(BargainsForCouplesSettings)).Bind(bargainsForCouplesSetting);
             services.AddSingleton(bargainsForCouplesSetting);
+
+            var memoryCacheSettings = new MemoryCacheSettings();
+            Configuration.GetSection(nameof(MemoryCacheSettings)).Bind(memoryCacheSettings);
+            services.AddSingleton(memoryCacheSettings);
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
