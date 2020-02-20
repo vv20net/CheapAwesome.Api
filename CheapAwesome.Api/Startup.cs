@@ -74,6 +74,10 @@ namespace CheapAwesome.Api
             services.AddHttpClient<IHotelAvailabilitySupplier, BargainsForCouplesHotelAvailabilityService>()
                 .AddPolicyHandler(retryPolicy)
                 .AddPolicyHandler(breakerPolicy);
+
+            var bargainsForCouplesSetting = new BargainsForCouplesSettings();
+            Configuration.GetSection(nameof(BargainsForCouplesSettings)).Bind(bargainsForCouplesSetting);
+            services.AddSingleton(bargainsForCouplesSetting);
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

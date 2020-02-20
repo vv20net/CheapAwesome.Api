@@ -14,21 +14,18 @@ namespace CheapAwesome.Supplier.BargainsForCouples
 {
     public class BargainsForCouplesHotelAvailabilityService : IHotelAvailabilitySupplier
     {
-        //TODO : read from config
-        private const string BASE_URL = "https://webbedsdevtest.azurewebsites.net/api";
-        //TODO : read from config
-        private const string SECRET_CODE = "aWH1EX7ladA8C/oWJX5nVLoEa4XKz2a64yaWVvzioNYcEo8Le8caJw==";
-
         private readonly HttpClient Client;
+        private readonly BargainsForCouplesSettings Settings;
 
-        public BargainsForCouplesHotelAvailabilityService(HttpClient httpClient)
+        public BargainsForCouplesHotelAvailabilityService(HttpClient httpClient, BargainsForCouplesSettings settings)
         {
             Client = httpClient;
+            Settings = settings;
         }
 
         public async Task<IList<HotelAvailability>> GetHotelAvailabilitiesAsync(int destinationId, int nights, CancellationToken cancellationToken)
         {
-            var url = $"{BASE_URL}/findBargain?destinationId={destinationId}&nights={nights}&code={SECRET_CODE}";
+            var url = $"{Settings.BaseUrl}/findBargain?destinationId={destinationId}&nights={nights}&code={Settings.SecretCode}";
 
             var httpResponse = await Client.GetAsync(url, cancellationToken);
             var responseJson = await httpResponse.Content.ReadAsStringAsync();
